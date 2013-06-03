@@ -10,7 +10,7 @@ class Gra(QtGui.QMainWindow):
 	def __init__(self):
 		super(Gra, self).__init__()
 		#inicjalizacja podsatwowych stalych
-		self._prz=50
+		self._prz=45
 		self._x0=10
 		self._y0=40
 		wym=12
@@ -18,20 +18,18 @@ class Gra(QtGui.QMainWindow):
 
 		self.resetuj(wym)
 		
-		self.wo=WysOdb()#uruchomienie serwera
-		
 		self.ONLINE_ST= False#czy gra ma sie toczyc online czy nie
 		
 		self.plansza(wym)
 		self.statusBar()
 		self.gorne_menu()
 		
-		self.setGeometry(50, 50, 700, 700)
+		self.setGeometry(50, 50, 600, 600)
 		self.setWindowTitle('GoMoKu by DoKaTo')
 		self.show()
 	
 	def resetuj(self,wym=12):
-		self.znak=1 # 0 kolko, 1 krzyzyk, 2 puste
+		self.znak=1 # 1 kolko, 0 krzyzyk, 2 puste
 		
 		self.licznikruchu=1		
 		#wyglad planszy:
@@ -55,7 +53,15 @@ class Gra(QtGui.QMainWindow):
 		startAct.setShortcut('Ctrl+N')
 		startAct.setStatusTip('Rozpoczyna nowa  gre')
 		startAct.triggered.connect(self.reset_planszy)
-		
+
+		on1Act = QtGui.QAction('&Gra online -1szy gracz', self)
+		on1Act.setStatusTip('Rozpoczyna nowa  gre online jako numer 1')
+		on1Act.triggered.connect(self.startgracz1)
+
+		on2Act = QtGui.QAction('&Gra online -2gi gracz', self)
+		on2Act.setStatusTip('Rozpoczyna nowa  gre online jako numer 2')
+		on2Act.triggered.connect(self.startgracz2)
+	
 		helpAct = QtGui.QAction('&Pomoc', self)        
 		helpAct.setShortcut('Ctrl+H')
 		helpAct.setStatusTip('Wyswietla informacje')
@@ -63,6 +69,8 @@ class Gra(QtGui.QMainWindow):
 		
 		fileMenu = menubar.addMenu('&Menu')
 		fileMenu.addAction(startAct)
+		fileMenu.addAction(on1Act)
+		fileMenu.addAction(on2Act)
 		fileMenu.addAction(exitAct)
 		
 		fileMenu2 = menubar.addMenu('&Info')
@@ -112,7 +120,38 @@ class Gra(QtGui.QMainWindow):
 		
 		if self.stan.checkit(self.ls)==False:
 			self.koniec()
+		
+		#tutaj cos co blokuje gdy serw slucha i wstawia wyslane dane
 
+
+	###ONLINE
+	def startgracz1(self):
+		self.ONLINE_ST=True
+		self.blokada(False)
+		self.wo=WysOdb()#uruchomienie serwera
+
+		self.reset_planszy()
+		self.statusBar().showMessage('Grasz jako pierwszy - czekaj na polaczenie')
+		if self.wo.przekaz('start')==True:
+			self.statusBar().showMessage('Start')
+			self.blokada(True)
+		
+	def startgracz2(self):
+		self.wo=WysOdb(op=0)#uruchomienie serwera ze zmiana
+		self.reset_planszy()
+		self.statusBar().showMessage('Grasz jako drugi - czekaj na polaczenie')
+		self.blokada(False)
+		if self.wo.odbierz()=='start':
+			self.odbierz_syg()
+
+	def wyslij_syg(self):
+		pass
+		
+	def odbierz_syg(self):
+		pass
+		
+	###
+	
 	def koniec(self):
 		if self.znak==1:
 			self.statusBar().showMessage('Wygral krzyzyk')
@@ -131,9 +170,14 @@ class Gra(QtGui.QMainWindow):
 			self.statusBar().showMessage('Ruch krzyzyka')
 
 class WysOdb(object):
-	def __init__(self,port_srv=7788,port_kl=6689,host='localhost'):
+	def __init__(self,port_srv=41000,port_kl=42000,host='localhost',op=1):
 		self.s = socket(AF_INET, SOCK_STREAM)
-		self.port_srv,self.port_kl=port_srv,port_kl
+
+		if op:
+			self.port_srv,self.port_kl=port_srv,port_kl
+		else:
+			self.port_srv,self.port_kl=port_kl,port_srv
+			
 		self.host=host
 		fl=1
 		while fl:
@@ -143,7 +187,7 @@ class WysOdb(object):
 				continue
 			fl=0
 		self.s.listen(2)
-
+	
 	def przekaz(self,pozycja):
 		b=socket(AF_INET, SOCK_STREAM)
 		fl=1
