@@ -14,9 +14,13 @@ class Gra(QtGui.QMainWindow):
 		self._x0=10
 		self._y0=40
 		wym=12
+		self.stan=StatusGry()
+
 		self.resetuj(wym)
 		
 		self.wo=WysOdb()#uruchomienie serwera
+		
+		self.ONLINE_ST= False#czy gra ma sie toczyc online czy nie
 		
 		self.plansza(wym)
 		self.statusBar()
@@ -26,14 +30,19 @@ class Gra(QtGui.QMainWindow):
 		self.setWindowTitle('GoMoKu by DoKaTo')
 		self.show()
 	
-	def resetuj(self,wym):
+	def resetuj(self,wym=12):
 		self.znak=1 # 0 kolko, 1 krzyzyk, 2 puste
 		
 		self.licznikruchu=1		
 		#wyglad planszy:
-		self.stan=StatusGry()
 		self.ls=self.stan.begin(wym)
 
+	def reset_planszy(self):
+		self.resetuj()
+		for i in range(len(self.przyc)):
+			self.przyc[i].setText(' ')
+		self.blokada(True)
+		
 	def gorne_menu(self):
 		menubar = self.menuBar()
 		
@@ -45,7 +54,7 @@ class Gra(QtGui.QMainWindow):
 		startAct = QtGui.QAction('&Nowa Gra', self)        
 		startAct.setShortcut('Ctrl+N')
 		startAct.setStatusTip('Rozpoczyna nowa  gre')
-		startAct.triggered.connect(QtGui.qApp.quit)
+		startAct.triggered.connect(self.reset_planszy)
 		
 		helpAct = QtGui.QAction('&Pomoc', self)        
 		helpAct.setShortcut('Ctrl+H')
@@ -77,12 +86,17 @@ class Gra(QtGui.QMainWindow):
 
 	def klik(self):
 		sender = self.sender()
+		print self.licznikruchu
 		zl,zr=sender.pozycja
-		if self.licznikruchu%2==0:
-			self.wstaw(zl,zr,sender)
+		if self.ONLINE_ST==True:
+			if self.licznikruchu%2==0:
+				self.wstaw(zl,zr,sender)
+			else:
+				self.wo.przekaz(str((zl,zr)))
 		else:
-			self.wo.przekaz(str((zl,zr)))
-		
+			self.wstaw(zl,zr,sender)
+
+
 	def wstaw(self,a1,a2,ob):
 		if self.ls[a1][a2]==2:
 			self.licznikruchu+=1
