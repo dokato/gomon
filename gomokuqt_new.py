@@ -31,6 +31,8 @@ class Gra(QtGui.QMainWindow):
 	def resetuj(self,wym=12):
 		self.znak=1 # 1 kolko, 0 krzyzyk, 2 puste
 		
+		self.ONLINE_ST=False
+		
 		self.licznikruchu=1		
 		#wyglad planszy:
 		self.ls=self.stan.begin(wym)
@@ -96,60 +98,74 @@ class Gra(QtGui.QMainWindow):
 		sender = self.sender()
 		print self.licznikruchu
 		zl,zr=sender.pozycja
-		if self.ONLINE_ST==True:
-			if self.licznikruchu%2==0:
-				self.wstaw(zl,zr,sender)
-			else:
-				self.wo.przekaz(str((zl,zr)))
-		else:
-			self.wstaw(zl,zr,sender)
+		self.wstaw(zl,zr)
+	
+	def rysuj(self,plansza):
+		l=0
+		for i in xrange(plansza.shape[0]):
+			for j in xrange(plansza.shape[0]):
+				if plansza[i][j]==2:
+					self.przyc[l].setText(' ')
+				if plansza[i][j]==1:
+					self.przyc[l].setText('O')
+				if plansza[i][j]==0:
+					self.przyc[l].setText('X')
+				l+=1
 
-
-	def wstaw(self,a1,a2,ob):
+	def wstaw(self,a1,a2):
 		if self.ls[a1][a2]==2:
 			self.licznikruchu+=1
-			if self.znak==0:
-				ob.setText('X')
-			else:
-				ob.setText('O')
-			
 			self.ls[a1][a2]=self.znak
-
+			
+			self.rysuj(self.ls)
+			
 			self.znak=self.licznikruchu%2
 			self.czyjruch()
 		
 		if self.stan.checkit(self.ls)==False:
 			self.koniec()
 		
+		if self.ONLINE_ST==True:
+			self.wyslij_syg(a1,a2)
 		#tutaj cos co blokuje gdy serw slucha i wstawia wyslane dane
 
 
 	###ONLINE
 	def startgracz1(self):
+		self.reset_planszy()
 		self.ONLINE_ST=True
 		self.blokada(False)
 		self.wo=WysOdb()#uruchomienie serwera
-
-		self.reset_planszy()
 		self.statusBar().showMessage('Grasz jako pierwszy - czekaj na polaczenie')
 		if self.wo.przekaz('start')==True:
 			self.statusBar().showMessage('Start')
 			self.blokada(True)
-		
+
 	def startgracz2(self):
-		self.wo=WysOdb(op=0)#uruchomienie serwera ze zmiana
 		self.reset_planszy()
+		self.ONLINE_ST=True
+		self.wo=WysOdb(op=0)#uruchomienie serwera ze zmiana
 		self.statusBar().showMessage('Grasz jako drugi - czekaj na polaczenie')
 		self.blokada(False)
 		if self.wo.odbierz()=='start':
+			self.statusBar().showMessage('Polaczono poprawnie czekaj na ruch')
 			self.odbierz_syg()
 
-	def wyslij_syg(self):
-		pass
+	def wyslij_syg(self,z1,z2):
+		self.blokada(False)
+		self.wo.przekaz(str((z1,z2)))
+		self.odbierz_syg()
+		self.blokada(True)
 		
 	def odbierz_syg(self):
-		pass
-		
+		self.blokada(False)
+		dostane=self.wo.odbierz()
+		while dostane!='start':
+			dostane=self.wo.odbierz()
+			print dostane
+			o1,o2=literal_eval(dostane)
+			self.wstaw(o1,o2)
+		self.blokada(True)
 	###
 	
 	def koniec(self):
@@ -195,6 +211,7 @@ class WysOdb(object):
 			try: b.connect((self.host, self.port_kl))
 			except:
 				self.port_kl+=1
+				print self.port_kl, 
 				continue
 			fl=0
 		b.send(pozycja)
