@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+
 import sys
 from socket import *
 import numpy as np
@@ -13,14 +14,16 @@ class Gra(QtGui.QMainWindow):
 		self._prz=45
 		self._x0=10
 		self._y0=40
-		wym=12
+		self.wym=12
 		self.stan=StatusGry()
-
-		self.resetuj(wym)
+		self.komp=SAI()
+		
+		self.resetuj(self.wym)
 		
 		self.ONLINE_ST= False#czy gra ma sie toczyc online czy nie
+		self.AI=False
 		
-		self.plansza(wym)
+		self.plansza(self.wym)
 		self.statusBar()
 		self.gorne_menu()
 		
@@ -28,14 +31,17 @@ class Gra(QtGui.QMainWindow):
 		self.setWindowTitle('GoMoKu by DoKaTo')
 		self.show()
 	
-	def resetuj(self,wym=12):
+	def resetuj(self,wym2=12):
 		self.znak=1 # 1 kolko, 0 krzyzyk, 2 puste
 		
 		self.ONLINE_ST=False
-		
+		self.AI=False
 		self.licznikruchu=1		
 		#wyglad planszy:
-		self.ls=self.stan.begin(wym)
+		self.ls=self.stan.begin(wym2)
+		if wym2 !=self.wym:
+			for i in range(len(self.przyc)):
+				self.przyc[i].setEnabled(False)
 
 	def reset_planszy(self):
 		self.resetuj()
@@ -63,21 +69,43 @@ class Gra(QtGui.QMainWindow):
 		on2Act = QtGui.QAction('&Gra online -2gi gracz', self)
 		on2Act.setStatusTip('Rozpoczyna nowa  gre online jako numer 2')
 		on2Act.triggered.connect(self.startgracz2)
+
+		aiAct = QtGui.QAction('&Gra z komputerem', self)
+		aiAct.setStatusTip('Rozpoczyna nowa  gre z wirtualnym przeciwnikiem')
+		aiAct.triggered.connect(self.start_z_komp)
 	
 		helpAct = QtGui.QAction('&Pomoc', self)        
 		helpAct.setShortcut('Ctrl+H')
 		helpAct.setStatusTip('Wyswietla informacje')
 		helpAct.triggered.connect(self.maly_help)
 		
+		rozmAct = QtGui.QAction('&Rozmiar planszy', self)        
+		rozmAct.setShortcut('Ctrl+R')
+		rozmAct.setStatusTip('Pozwala wybrac rozmiar planszy')
+		rozmAct.triggered.connect(self.wybor_rozm)
+		
 		fileMenu = menubar.addMenu('&Menu')
 		fileMenu.addAction(startAct)
 		fileMenu.addAction(on1Act)
 		fileMenu.addAction(on2Act)
+		fileMenu.addAction(aiAct)
 		fileMenu.addAction(exitAct)
-		
-		fileMenu2 = menubar.addMenu('&Info')
-		fileMenu2.addAction(helpAct)
 
+		fileMenu2 = menubar.addMenu('&Opcje')
+		fileMenu2.addAction(rozmAct)
+
+		fileMenu3 = menubar.addMenu('&Info')
+		fileMenu3.addAction(helpAct)
+
+	def wybor_rozm(self):
+		items = {"8x8":8, "12x12":12, "15x15":15}
+
+		item, ok = QtGui.QInputDialog.getItem(self, "Rozmiar",
+			"Season:", items.keys(), 0, False)
+		if ok and item:
+			self.statusBar().showMessage('Wybrano rozmiar: ' +str(item))
+			self.resetuj(items[str(item)])
+			
 	def maly_help(self):
 		msg = 'To moja wiadomosc \n jestem tworca tego programu \nDK'
 		QtGui.QMessageBox.about(self, "O Gomoku", msg.strip())
@@ -117,13 +145,25 @@ class Gra(QtGui.QMainWindow):
 			self.licznikruchu+=1
 			self.ls[a1][a2]=self.znak
 			
-			self.rysuj(self.ls)
-			
-			self.znak=self.licznikruchu%2
+			if self.AI==True:
+				self.licznikruchu+=1
+				
+				sz1,sz2=self.komp.simple_ai(self.ls)
+				
+				self.znak-=1
+				
+				self.ls[sz1][sz2]=self.znak
+				self.rysuj(self.ls)
+				
+			else:
+				self.rysuj(self.ls)
+
 			self.czyjruch()
 		
 		if self.stan.checkit(self.ls)==False:
 			self.koniec()
+		
+		self.znak=self.licznikruchu%2
 		
 		if self.ONLINE_ST==True:
 			self.wyslij_syg(a1,a2)
@@ -143,10 +183,10 @@ class Gra(QtGui.QMainWindow):
 
 	def startgracz2(self):
 		self.reset_planszy()
+		self.blokada(False)
 		self.ONLINE_ST=True
 		self.wo=WysOdb(op=0)#uruchomienie serwera ze zmiana
 		self.statusBar().showMessage('Grasz jako drugi - czekaj na polaczenie')
-		self.blokada(False)
 		if self.wo.odbierz()=='start':
 			self.statusBar().showMessage('Polaczono poprawnie czekaj na ruch')
 			self.odbierz_syg()
@@ -156,7 +196,7 @@ class Gra(QtGui.QMainWindow):
 		self.wo.przekaz(str((z1,z2)))
 		self.odbierz_syg()
 		self.blokada(True)
-		
+
 	def odbierz_syg(self):
 		self.blokada(False)
 		dostane=self.wo.odbierz()
@@ -167,7 +207,10 @@ class Gra(QtGui.QMainWindow):
 			self.wstaw(o1,o2)
 		self.blokada(True)
 	###
-	
+	def start_z_komp(self):
+		self.reset_planszy()
+		self.AI=True
+
 	def koniec(self):
 		if self.znak==1:
 			self.statusBar().showMessage('Wygral krzyzyk')
@@ -225,43 +268,82 @@ class WysOdb(object):
 		client.send('ok')
 		client.close()
 		return data
-
+	
+		
 class StatusGry():
 	def begin(self, n):
 		x=np.ones((n,n))*2
 		return x
 		
-	def sprawdzliste(self,lst):
-		if len(lst)==5:
-			if np.sum(lst==0)==5:
+	def sprawdzliste(self,lst,lim):
+		if len(lst)==lim:
+			if np.sum(lst==0)==lim:
 				return False
-			if np.sum(lst==1)==5:
+			if np.sum(lst==1)==lim:
 				return False
 		return True
 
-	def checkit(self,plansza):
-		lim=5 # ile razem aby wygrac
+	def checkit(self,plansza,lim=5):
+		# lim = ile razem aby wygrac
 		# wiersze
 		for	row in plansza:
 			for i in xrange(len(row)):
-				if self.sprawdzliste(row[i:i+lim])==0:
+				if self.sprawdzliste(row[i:i+lim],lim)==0:
 					return False
 		#kolumny
 		for	row in plansza.T:
 			for i in xrange(len(row)):
-				if self.sprawdzliste(row[i:i+lim])==0:
+				if self.sprawdzliste(row[i:i+lim],lim)==0:
 					return False
 		#przekatne
 		for b in range(plansza.shape[0]):
 			for i in range(len(plansza[0])):
 				tab=plansza[b:b+lim, i:i+lim]
 				if tab.shape==(lim,lim):
-					if self.sprawdzliste(tab.diagonal())==0:
+					if self.sprawdzliste(tab.diagonal(),lim)==0:
 						return False
-					if self.sprawdzliste(tab[:,::-1].diagonal())==0:
+					if self.sprawdzliste(tab[:,::-1].diagonal(),lim)==0:
 						return False
 		return True
 
+class SAI(object):
+	def __init__(self):
+		self.sg=StatusGry()
+		
+	def simple_ai(self,plan):
+		if self.sg.checkit(plan,lim=4)==0:
+			return self.zakanczacz(plan)
+		else:
+			return self.stupid_ai(plan)
+			
+	def stupid_ai(self, plan,x=None,y=None):
+		fl=0
+		while fl==0:
+			a=np.random.randint(0,plan.shape[0])
+			b=np.random.randint(0,plan.shape[0])
+			if plan[a][b]==2:
+				fl=1
+		if x==None and y==None: return a,b
+		else: return x+b-1,y+a+1
+	
+	def zakanczacz(self,plan):
+		lim=4
+		for	e,row in enumerate(plan):
+			for i in xrange(len(row)):
+				if self.sg.sprawdzliste(row[i:i+lim],lim)==0:
+					return self.stupid_ai(plan[e:e+lim,i:i+lim],e,i)
+		for	e,row in enumerate(plan.T):
+			for i in xrange(len(row)):
+				if self.sg.sprawdzliste(row[i:i+lim],lim)==0:
+					return self.stupid_ai(plan[i:i+lim,e:e+lim],e,i)
+		for b in range(plan.shape[0]):
+			for i in range(len(plansza[0])):
+				tab=plan[b:b+lim, i:i+lim]
+				if tab.shape==(lim,lim):
+					if self.sg.sprawdzliste(tab.diagonal(),lim)==0:
+						return self.stupid_ai(tab,i,b)
+					if self.sg.sprawdzliste(tab[:,::-1].diagonal(),lim)==0:
+						return self.stupid_ai(tab,i,b)
 
 def main():
 	app = QtGui.QApplication(sys.argv)
