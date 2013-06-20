@@ -5,6 +5,7 @@ Kazdy z dwoch graczy ma do dyspozycji kamienie: jeden koloru bialego (O), drugi 
 
 Celem gry jest ulozenie na planszy dokladnie pieciu  kamieni swojego koloru w ciaglej linii - poziomej, pionowej lub ukosnej. Pierwszy gracz, ktory tego dokona, zostaje zwyciezca. Jesli nie uda sie to nikomu (plansza zostanie zapelniona), nastepuje remis.
 
+
 Autor: Dominik Krzemiñski
-Wersja: 0.82
+Wersja: 0.92
 Licencja: GPL

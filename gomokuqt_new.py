@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Dominik Krzeminski'
-__version__ = '0.82'
-__date__ = '29-05-2013'
+__version__ = '0.92'
+__date__ = '20-06-2013'
 __license__ = 'GPL'
 
 import sys
@@ -22,9 +22,10 @@ class Gra(QtGui.QMainWindow):
 		self.wym=12 # wymiar planszy
 		self.stan=StatusGry() #klasa sprawdzajaca czy rozgrywka jest juz skonczona
 		self.komp=SAI() # prosta sztuczna inteligencja - wybory komputera
-		
+		self.over=False
 		self.resetuj(self.wym)
 		
+		self.wczyt() # wczytuje parametry polaczenie online
 		self.ONLINE_ST= False#czy gra ma sie toczyc online czy nie
 		self.AI=False
 		
@@ -32,7 +33,7 @@ class Gra(QtGui.QMainWindow):
 		self.statusBar()
 		self.gorne_menu()
 		
-		self.setGeometry(50, 50, 600, 600)
+		self.setGeometry(50, 50, 560, 610)
 		self.setWindowTitle('GoMoKu by DoKaTo')
 		self.show()
 	
@@ -64,6 +65,7 @@ class Gra(QtGui.QMainWindow):
 		if stTip: r.setStatusTip(stTip)
 		r.triggered.connect(akcja)
 		return r
+
 	def gorne_menu(self):
 		'obsluguje wszystkie akcje z gornego menu'
 		menubar = self.menuBar()
@@ -75,6 +77,10 @@ class Gra(QtGui.QMainWindow):
 		aiAct = self.rob_menu('&Gra z komputerem', None,'Rozpoczyna nowa  gre z wirtualnym przeciwnikiem',self.start_z_komp)
 		helpAct = self.rob_menu('&Pomoc', 'Ctrl+H','Wyswietla informacje',self.maly_help)
 		
+		p1Act = self.rob_menu('&Zmien port1', None,'Ustawia port',self.ustaw_port1)
+		p2Act = self.rob_menu('&Zmien port2', None,'Ustawia port',self.ustaw_port2)
+		hnAct = self.rob_menu('&Zmien host', None,'Ustawia host',self.ustaw_hosta)
+
 		fileMenu = menubar.addMenu('&Menu')
 		fileMenu.addAction(startAct)
 		fileMenu.addAction(on1Act)
@@ -83,16 +89,37 @@ class Gra(QtGui.QMainWindow):
 		fileMenu.addAction(exitAct)
 
 		fileMenu2 = menubar.addMenu('&Opcje')
-		#fileMenu2.addAction(rozmAct)
+		fileMenu2.addAction(p1Act)
+		fileMenu2.addAction(p2Act)
+		fileMenu2.addAction(hnAct)
 
 		fileMenu3 = menubar.addMenu('&Info')
 		fileMenu3.addAction(helpAct)
 		
 	def maly_help(self):
+		'wczytuje informacje z pliku i wyswietla je w MessageBoxie'
 		f=open('about.txt','r')
 		msg=''
 		for w in f: msg+=w
 		QtGui.QMessageBox.about(self, "O Gomoku", msg.strip())
+
+	def ustaw_port1(self):
+		text, ok = QtGui.QInputDialog.getText(self, "Ustaw port 1",
+			"Podaj port 1.\n UWAGA ! pamietaj aby porty byly takie same dla obu graczy", 
+			QtGui.QLineEdit.Normal, str(self.srv))
+		if ok and text != '': self.srv=int(text)
+
+	def ustaw_port2(self):
+		text, ok = QtGui.QInputDialog.getText(self, "Ustaw port 2",
+			"Podaj port 2.\n UWAGA ! pamietaj aby porty byly takie same dla obu graczy", 
+			QtGui.QLineEdit.Normal, str(self.kl))
+		if ok and text != '': self.kl=int(text)
+
+	def ustaw_hosta(self):
+		text, ok = QtGui.QInputDialog.getText(self, "Ustaw port 2",
+			"Podaj nazwe hosta.\n UWAGA ! pamietaj aby hosty byly takie same dla obu graczy", 
+			QtGui.QLineEdit.Normal, str(self.hostname))
+		if ok and text != '': self.hostname=text
 
 	def plansza(self,n):
 		'''obsluguje stan poczatkowy planszy, rysuje przyciski i dodaje
@@ -135,21 +162,21 @@ class Gra(QtGui.QMainWindow):
 			self.licznikruchu+=1
 			self.ls[a1][a2]=self.znak
 			
-			if self.AI==True:
+			if self.AI==True: # jesli AI aktywny to ruch kompa
 				self.licznikruchu+=1
 				sz1,sz2=self.komp.simple_ai(self.ls)
 				self.znak-=1
 				self.ls[sz1][sz2]=self.znak
 				self.rysuj(self.ls)
-			else:
+			else: # jesli nie to tylko rysuje plansze
 				self.rysuj(self.ls)
 
-			self.czyjruch()
+		self.znak=self.licznikruchu%2
+		self.czyjruch()
 		
 		if self.stan.checkit(self.ls)==False:
 			self.koniec()
-		
-		self.znak=self.licznikruchu%2
+			self.over=True
 		
 		if self.ONLINE_ST==True and self.bl==1:
 			self.wyslij_syg(a1,a2)
@@ -157,13 +184,13 @@ class Gra(QtGui.QMainWindow):
 
 	###ONLINE
 	def startgracz1(self):
-		self.wys=Wysylacz()
-		self.odb=Odbieracz()
+		self.wys=Wysylacz(srv=self.srv,kl=self.kl,hn=self.hostname)
+		self.odb=Odbieracz(srv=self.srv,kl=self.kl,hn=self.hostname)
 		self.laczenie()
 
 	def startgracz2(self):
-		self.wys=Wysylacz(srv=40205,kl=40100)
-		self.odb=Odbieracz(srv=40205,kl=40100)
+		self.wys=Wysylacz(srv=self.kl,kl=self.srv)
+		self.odb=Odbieracz(srv=self.kl,kl=self.srv)
 		self.laczenie()
 		self.bl=0
 		self.odbierz_syg()
@@ -181,20 +208,19 @@ class Gra(QtGui.QMainWindow):
 		self.blokada(False)
 		self.statusBar().showMessage('Wysylanie w toku...')
 		self.wys.pracuj(str((z1,z2)))
-		print 'koniec pracy wysylajacego'
-		self.odbierz_syg()
+		if self.over==False: self.odbierz_syg()
 
 	def odbierz_syg(self):
 		'nasluchuje, a gdy obierze powinno wstawic i przejsc do wyslania'
 		self.statusBar().showMessage('Czekam na polaczenie...')
 		self.blokada(False)
 		self.odb.pracuj()
-		
+
 	def otrzymany(self, poz):
-		print poz, type(poz)
 		o1,o2=literal_eval(str(poz))
 		self.wstaw(o1,o2)
 	###
+
 	def start_z_komp(self):
 		'rozpoczyna gre z AI, resetuje plansze i ustawia status AI'
 		self.reset_planszy()
@@ -209,7 +235,9 @@ class Gra(QtGui.QMainWindow):
 		self.blokada()
 	
 	def odsw(self):
-		self.blokada(True)
+		if self.over==False: self.blokada(True)
+		else:
+			self.koniec()
 	
 	def blokada(self,czy=False):
 		'wylacza przyciski'
@@ -234,9 +262,9 @@ class Gra(QtGui.QMainWindow):
 		
 class StatusGry():
 	'''begin - inicjalizuje plansze
-	checkit przebiega po wierszach, kolumnach, przekatnych aby sprawdzicz czy nie
-	ma liczby <<lim>> takich samych w danych rzucie. Jesli jest to zwraca False,
-	gdy nie to oddaje True'''
+	checkit przebiega po wierszach, kolumnach, przekatnych aby sprawdzic czy nie
+	ma liczby <<lim>> takich samych w danych rzucie. Jesli jest, to zwraca False,
+	gdy nie, to oddaje True'''
 	def begin(self, n):
 		x=np.ones((n,n))*2
 		return x
@@ -298,8 +326,6 @@ class SAI(object):
 			fl=0
 			nx,ny=x+b-1,y+a+1
 			while fl==0:
-				print nx,ny
-				print plan
 				if self.cala_plansza[nx][ny]==2:
 					return nx,ny
 				else:
@@ -332,12 +358,13 @@ class SAI(object):
 						return self.stupid_ai(tab,i,b)
 
 class Wysylacz(QtCore.QThread):
-	def __init__(self,parent=None,srv=40100,kl=40205):
+	'watek wysylajacy dane'
+	def __init__(self,parent=None,srv=40100,kl=40205,hn='localhost'):
 		QtCore.QThread.__init__(self, parent)
 		self.exiting = False
 		self.port_srv=srv
 		self.port_kl=kl
-		self.host='localhost'
+		self.host=hn
 		
 
 	def __del__(self):
@@ -350,28 +377,23 @@ class Wysylacz(QtCore.QThread):
 		
 	def run(self):
 		self.b=socket(AF_INET, SOCK_STREAM)
-		print 'start wysylania'
 		fl=0
 		self.b.connect((self.host, self.port_kl))
 		if fl==0:
-			print '++ polaczono', self.port_kl
 			self.b.send(str(self.a))
 			data = self.b.recv(1024)
-			#if data=='jest ok':
-				#self.b.close()
-				#self.emit(QtCore.SIGNAL("output(QString)"),str(data)+'\n')
 
 class Odbieracz(QtCore.QThread):
-	def __init__(self,parent=None,srv=40100,kl=40205):
+	'watek odbierajacy dane'
+	def __init__(self,parent=None,srv=40100,kl=40205,hn='localhost'):
 		QtCore.QThread.__init__(self, parent)
 		self.exiting = False
 		
 		self.s = socket(AF_INET, SOCK_STREAM)
 		self.port_srv=srv
 		self.port_kl=kl
-		self.host='localhost'
+		self.host=hn
 		self.s.bind((self.host, self.port_srv))
-		print 'twoj host', self.host, 'port',self.port_srv
 		self.s.listen(2)
 
 	def __del__(self):
@@ -383,11 +405,8 @@ class Odbieracz(QtCore.QThread):
 		self.start()
 			
 	def run(self):
-		print 'start sluchania'
 		client,addr = self.s.accept()
 		data = client.recv(1024)
-		print 'Polaczenie z ', addr
-		print 'odebrano', data
 		client.send('jest ok')
 		client.close()
 		self.emit(QtCore.SIGNAL("output(QString)"),str(data)+'\n')
