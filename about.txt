@@ -1,0 +1,10 @@
++++++++++++++++++++++GoMoKu by DoKaTo+++++++++++++++++++++
+Gra znana tez jako kolko i krzyzyk do pieciu.
+
+Kazdy z dwoch graczy ma do dyspozycji kamienie: jeden koloru bialego (O), drugi - czarnego (X), ktore ukladaja na przemian na wolnych polach planszy.
+
+Celem gry jest ulozenie na planszy dokladnie pieciu  kamieni swojego koloru w ciaglej linii - poziomej, pionowej lub ukosnej. Pierwszy gracz, ktory tego dokona, zostaje zwyciezca. Jesli nie uda sie to nikomu (plansza zostanie zapelniona), nastepuje remis.
+
+Autor: Dominik Krzemiñski
+Wersja: 0.82
+Licencja: GPL

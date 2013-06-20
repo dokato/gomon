@@ -57,42 +57,23 @@ class Gra(QtGui.QMainWindow):
 		for i in range(len(self.przyc)):
 			self.przyc[i].setText(' ')
 		self.blokada(True)
-		
+	
+	def rob_menu(self,nazwa, skrot, stTip, akcja):
+		r=QtGui.QAction(nazwa,self)
+		if skrot: r.setShortcut(skrot)
+		if stTip: r.setStatusTip(stTip)
+		r.triggered.connect(akcja)
+		return r
 	def gorne_menu(self):
 		'obsluguje wszystkie akcje z gornego menu'
 		menubar = self.menuBar()
 		
-		exitAct = QtGui.QAction('&Zamknij', self)        
-		exitAct.setShortcut('Ctrl+Q')
-		exitAct.setStatusTip('Zamyka aplikacje')
-		exitAct.triggered.connect(QtGui.qApp.quit)
-		
-		startAct = QtGui.QAction('&Nowa Gra', self)        
-		startAct.setShortcut('Ctrl+N')
-		startAct.setStatusTip('Rozpoczyna nowa  gre')
-		startAct.triggered.connect(self.reset_planszy)
-
-		on1Act = QtGui.QAction('&Gra online -1szy gracz', self)
-		on1Act.setStatusTip('Rozpoczyna nowa  gre online jako numer 1')
-		on1Act.triggered.connect(self.startgracz1)
-
-		on2Act = QtGui.QAction('&Gra online -2gi gracz', self)
-		on2Act.setStatusTip('Rozpoczyna nowa  gre online jako numer 2')
-		on2Act.triggered.connect(self.startgracz2)
-
-		aiAct = QtGui.QAction('&Gra z komputerem', self)
-		aiAct.setStatusTip('Rozpoczyna nowa  gre z wirtualnym przeciwnikiem')
-		aiAct.triggered.connect(self.start_z_komp)
-	
-		helpAct = QtGui.QAction('&Pomoc', self)        
-		helpAct.setShortcut('Ctrl+H')
-		helpAct.setStatusTip('Wyswietla informacje')
-		helpAct.triggered.connect(self.maly_help)
-		
-		rozmAct = QtGui.QAction('&Rozmiar planszy', self)        
-		rozmAct.setShortcut('Ctrl+R')
-		rozmAct.setStatusTip('Pozwala wybrac rozmiar planszy')
-		rozmAct.triggered.connect(self.wybor_rozm)
+		exitAct = self.rob_menu("&Zamknij",'Ctrl+Q','Zamyka aplikacje',QtGui.qApp.quit)
+		startAct = self.rob_menu('&Nowa Gra','Ctrl+N','Rozpoczyna nowa  gre',self.reset_planszy)
+		on1Act=self.rob_menu('&Gra online -1szy gracz',None,'Rozpoczyna nowa  gre online jako numer 1',self.startgracz1)
+		on2Act=self.rob_menu('&Gra online -2gi gracz',None,'Rozpoczyna nowa  gre online jako numer 2',self.startgracz2)
+		aiAct = self.rob_menu('&Gra z komputerem', None,'Rozpoczyna nowa  gre z wirtualnym przeciwnikiem',self.start_z_komp)
+		helpAct = self.rob_menu('&Pomoc', 'Ctrl+H','Wyswietla informacje',self.maly_help)
 		
 		fileMenu = menubar.addMenu('&Menu')
 		fileMenu.addAction(startAct)
@@ -102,21 +83,15 @@ class Gra(QtGui.QMainWindow):
 		fileMenu.addAction(exitAct)
 
 		fileMenu2 = menubar.addMenu('&Opcje')
-		fileMenu2.addAction(rozmAct)
+		#fileMenu2.addAction(rozmAct)
 
 		fileMenu3 = menubar.addMenu('&Info')
 		fileMenu3.addAction(helpAct)
-
-	def wybor_rozm(self):
-		items = {"8x8":8, "12x12":12, "15x15":15}
-
-		item, ok = QtGui.QInputDialog.getItem(self, "Rozmiar", "Wybierz:", items.keys(), 0, False)
-		if ok and item:
-			self.statusBar().showMessage('Wybrano rozmiar: ' +str(item))
-			self.resetuj(items[str(item)])
-			
+		
 	def maly_help(self):
-		msg = 'To moja wiadomosc \n jestem tworca tego programu \nDK'
+		f=open('about.txt','r')
+		msg=''
+		for w in f: msg+=w
 		QtGui.QMessageBox.about(self, "O Gomoku", msg.strip())
 
 	def plansza(self,n):
@@ -179,8 +154,6 @@ class Gra(QtGui.QMainWindow):
 		if self.ONLINE_ST==True and self.bl==1:
 			self.wyslij_syg(a1,a2)
 			self.bl=0
-		#tutaj cos co blokuje gdy serw slucha i wstawia wyslane dane
-
 
 	###ONLINE
 	def startgracz1(self):
@@ -206,12 +179,14 @@ class Gra(QtGui.QMainWindow):
 	def wyslij_syg(self,z1,z2):
 		'wysyla kliknieta pozycje'
 		self.blokada(False)
+		self.statusBar().showMessage('Wysylanie w toku...')
 		self.wys.pracuj(str((z1,z2)))
 		print 'koniec pracy wysylajacego'
 		self.odbierz_syg()
 
 	def odbierz_syg(self):
 		'nasluchuje, a gdy obierze powinno wstawic i przejsc do wyslania'
+		self.statusBar().showMessage('Czekam na polaczenie...')
 		self.blokada(False)
 		self.odb.pracuj()
 		
@@ -247,7 +222,15 @@ class Gra(QtGui.QMainWindow):
 			self.statusBar().showMessage('Ruch kolka')
 		if self.znak==0:
 			self.statusBar().showMessage('Ruch krzyzyka')
-
+	
+	def wczyt(self):
+		import pickle
+		sc = 'set.data'
+		f2 = open(sc, 'rb')
+		dd = pickle.load(f2)
+		self.srv=dd[0]
+		self.kl=dd[1]
+		self.hostname=dd[2]
 		
 class StatusGry():
 	'''begin - inicjalizuje plansze
