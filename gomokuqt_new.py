@@ -136,6 +136,7 @@ class Gra(QtGui.QMainWindow):
 	def klik(self):
 		'czyli co sie dzieje po kliknieciu - przechwytuje pozycje i wywoluje wstaw'
 		sender = self.sender()
+		self.bl=1 #blokada zapetlania wysylanego sygnalu
 		zl,zr=sender.pozycja
 		self.wstaw(zl,zr)
 	
@@ -175,51 +176,49 @@ class Gra(QtGui.QMainWindow):
 		
 		self.znak=self.licznikruchu%2
 		
-		if self.ONLINE_ST==True:
+		if self.ONLINE_ST==True and self.bl==1:
 			self.wyslij_syg(a1,a2)
+			self.bl=0
 		#tutaj cos co blokuje gdy serw slucha i wstawia wyslane dane
 
 
 	###ONLINE
 	def startgracz1(self):
-		'wysyla komunikat o poczatku gry i czeka na polaczenie'
-		self.reset_planszy()
-		self.ONLINE_ST=True
-		self.blokada(False)
-		self.wo=WysOdb()#uruchomienie serwera
-		self.statusBar().showMessage('Grasz jako pierwszy - czekaj na polaczenie')
-		if self.wo.przekaz('start')==True:
-			self.statusBar().showMessage('Start')
-			self.blokada(True)
+		self.wys=Wysylacz()
+		self.odb=Odbieracz()
+		self.laczenie()
 
 	def startgracz2(self):
-		'jesli odbierze komunikat o poczatku powinna sie zaczac tura online'
-		self.reset_planszy()
-		self.blokada(False)
-		self.ONLINE_ST=True
-		self.wo=WysOdb(op=0)#uruchomienie serwera ze zmiana
-		self.statusBar().showMessage('Grasz jako drugi - czekaj na polaczenie')
-		if self.wo.odbierz()=='start':
-			self.statusBar().showMessage('Polaczono poprawnie czekaj na ruch')
-			self.odbierz_syg()
-
+		self.wys=Wysylacz(srv=40205,kl=40100)
+		self.odb=Odbieracz(srv=40205,kl=40100)
+		self.laczenie()
+		self.bl=0
+		self.odbierz_syg()
+		
+	def laczenie(self):
+		'laczy akcje z watkami'
+		self.ONLINE_ST= True
+		#self.connect(self.wys, QtCore.SIGNAL("output(QString)"), self.wypisz_w)
+		self.connect(self.odb, QtCore.SIGNAL("finished()"), self.odsw)
+		self.connect(self.odb, QtCore.SIGNAL("terminated()"), self.odsw)
+		self.connect(self.odb, QtCore.SIGNAL("output(QString)"), self.otrzymany)
+		
 	def wyslij_syg(self,z1,z2):
 		'wysyla kliknieta pozycje'
 		self.blokada(False)
-		self.wo.przekaz(str((z1,z2)))
+		self.wys.pracuj(str((z1,z2)))
+		print 'koniec pracy wysylajacego'
 		self.odbierz_syg()
-		self.blokada(True)
 
 	def odbierz_syg(self):
 		'nasluchuje, a gdy obierze powinno wstawic i przejsc do wyslania'
 		self.blokada(False)
-		dostane=self.wo.odbierz()
-		while dostane!='start':
-			dostane=self.wo.odbierz()
-			print dostane
-			o1,o2=literal_eval(dostane)
-			self.wstaw(o1,o2)
-		self.blokada(True)
+		self.odb.pracuj()
+		
+	def otrzymany(self, poz):
+		print poz, type(poz)
+		o1,o2=literal_eval(str(poz))
+		self.wstaw(o1,o2)
 	###
 	def start_z_komp(self):
 		'rozpoczyna gre z AI, resetuje plansze i ustawia status AI'
@@ -233,7 +232,10 @@ class Gra(QtGui.QMainWindow):
 		if self.znak==0:
 			self.statusBar().showMessage('Wygralo kolko')
 		self.blokada()
-
+	
+	def odsw(self):
+		self.blokada(True)
+	
 	def blokada(self,czy=False):
 		'wylacza przyciski'
 		for i in range(len(self.przyc)):
@@ -246,52 +248,6 @@ class Gra(QtGui.QMainWindow):
 		if self.znak==0:
 			self.statusBar().showMessage('Ruch krzyzyka')
 
-class WysOdb(object):
-	'''Klasa obsugujaca serwer/klient w grze. Przy inicie szuka wolnego
-	portu zeby postawic serwer. Przy przekaz szuka wolnego portu dla klienta.
-	Zapamietuje te porty. Potem wysyla przez przekaz i odbiera przez odbierz.
-	Sygnalem poprawnosci ma byc slowko <<ok>> wyslane przy odebraniu.
-	Jako czat dziala bez zarzutu'''
-	def __init__(self,port_srv=41000,port_kl=42000,host='localhost',op=1):
-		self.s = socket(AF_INET, SOCK_STREAM)
-
-		if op:
-			self.port_srv,self.port_kl=port_srv,port_kl
-		else:
-			self.port_srv,self.port_kl=port_kl,port_srv
-			
-		self.host=host
-		fl=1
-		while fl:
-			try: self.s.bind((self.host, self.port_srv))
-			except:
-				self.port_srv+=1
-				continue
-			fl=0
-		self.s.listen(2)
-	
-	def przekaz(self,pozycja):
-		b=socket(AF_INET, SOCK_STREAM)
-		fl=1
-		while fl:
-			try: b.connect((self.host, self.port_kl))
-			except:
-				self.port_kl+=1
-				print self.port_kl, 
-				continue
-			fl=0
-		b.send(pozycja)
-		poprawnosc = b.recv(1024)
-		if poprawnosc=='ok':
-			return True
-
-	def odbierz(self):
-		client,addr = self.s.accept()
-		data = client.recv(1024)
-		client.send('ok')
-		client.close()
-		return data
-	
 		
 class StatusGry():
 	'''begin - inicjalizuje plansze
@@ -391,6 +347,67 @@ class SAI(object):
 						return self.stupid_ai(tab,i,b)
 					if self.sg.sprawdzliste(tab[:,::-1].diagonal(),lim)==0:
 						return self.stupid_ai(tab,i,b)
+
+class Wysylacz(QtCore.QThread):
+	def __init__(self,parent=None,srv=40100,kl=40205):
+		QtCore.QThread.__init__(self, parent)
+		self.exiting = False
+		self.port_srv=srv
+		self.port_kl=kl
+		self.host='localhost'
+		
+
+	def __del__(self):
+		self.exiting = True
+		self.wait()
+        	
+	def pracuj(self,a):
+		self.a=a
+		self.start()
+		
+	def run(self):
+		self.b=socket(AF_INET, SOCK_STREAM)
+		print 'start wysylania'
+		fl=0
+		self.b.connect((self.host, self.port_kl))
+		if fl==0:
+			print '++ polaczono', self.port_kl
+			self.b.send(str(self.a))
+			data = self.b.recv(1024)
+			#if data=='jest ok':
+				#self.b.close()
+				#self.emit(QtCore.SIGNAL("output(QString)"),str(data)+'\n')
+
+class Odbieracz(QtCore.QThread):
+	def __init__(self,parent=None,srv=40100,kl=40205):
+		QtCore.QThread.__init__(self, parent)
+		self.exiting = False
+		
+		self.s = socket(AF_INET, SOCK_STREAM)
+		self.port_srv=srv
+		self.port_kl=kl
+		self.host='localhost'
+		self.s.bind((self.host, self.port_srv))
+		print 'twoj host', self.host, 'port',self.port_srv
+		self.s.listen(2)
+
+	def __del__(self):
+		self.exiting = True
+		self.s.close()
+		self.wait()
+
+	def pracuj(self):
+		self.start()
+			
+	def run(self):
+		print 'start sluchania'
+		client,addr = self.s.accept()
+		data = client.recv(1024)
+		print 'Polaczenie z ', addr
+		print 'odebrano', data
+		client.send('jest ok')
+		client.close()
+		self.emit(QtCore.SIGNAL("output(QString)"),str(data)+'\n')
 
 def main():
 	app = QtGui.QApplication(sys.argv)
